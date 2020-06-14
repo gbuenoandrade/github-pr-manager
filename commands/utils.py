@@ -45,13 +45,14 @@ class Git(object):
         for l in pr_list.splitlines():
             number = l.strip().split()[0]
             pr_view, _, _ =  run_cmd(f'gh pr view {number}')
+            title = pr_view.partition('\n')[0]
             m = re.search(r'into (\S+) from (\S+)', pr_view)
             base, compare = m.groups()
             if base not in branches or compare not in branches:
                 continue
-            m = re.search(r'https://\S+', pr_view)
-            url = m.group()
-            prs.append(PR(number, base, compare, url))
+            m = re.search(r'request on GitHub: (https://\S+)', pr_view)
+            url = m.groups()[0]
+            prs.append(PR(number, base, compare, url, title))
         return prs
 
     @staticmethod
@@ -68,7 +69,7 @@ class Git(object):
 
     @staticmethod
     def ff_master(cur):
-        print('fast-forwarding master')
+        print('Fast-forwarding master')
         if cur == 'master':
             run_cmd('git pull origin master', interactive=True)
         else:
@@ -82,14 +83,15 @@ class Git(object):
 
 
 class PR(object):
-    def __init__(self, number, base, compare, url):
+    def __init__(self, number, base, compare, url, title):
         self.number = number
         self.base = base
         self.compare = compare
         self.url = url
+        self.title = title
 
     def __repr__(self):
-        return f'PR #{self.number}: {self.base} <- {self.compare} ({self.url})'
+        return f'{self.title} #{self.number}: {self.base} <- {self.compare} ({self.url})'
 
 
 def run_cmd(cmd, interactive=False, check=True):

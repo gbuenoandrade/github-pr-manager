@@ -46,7 +46,7 @@ def load_evolve():
     with open(EVOLVE_PATH, 'r') as f:
         data = json.load(f)
     cur = data['cur']
-    rem_prs = [PR(d['number'], d['base'], d['compare'], d['url']) for d in data['rem_prs']]
+    rem_prs = [PR(d['number'], d['base'], d['compare'], d['url'], d['title']) for d in data['rem_prs']]
     branch_to_pr_num = data['branch_to_pr_num']
     os.remove(EVOLVE_PATH)
     return cur, rem_prs, branch_to_pr_num
@@ -55,10 +55,10 @@ def load_evolve():
 def evolve(git, cur, prs, branch_to_pr_num):
     git.ff_master(cur)
     for idx, pr in enumerate(prs):
-        print(f'\nevolving\n{pr}')
+        print(f'\nEvolving {pr}')
         if not propagate(git, pr, branch_to_pr_num):
             save_evolve(cur, prs[idx:], branch_to_pr_num)
-            print('run `prman evolve --continue` once you have committed the result')
+            print('Run `prman evolve --continue` once you have committed the result')
             exit(1)
     return True
 
