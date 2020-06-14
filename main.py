@@ -19,10 +19,8 @@ def main():
     submit_parser.set_defaults(func=lambda _ : submit.run())
 
     create_parser = subparsers.add_parser('create', help='create pull request')
-    create_parser.add_argument(
-        '-d', '--dependencies', nargs='+', required=True,
-        help='pull requests this should depend on')
-    create_parser.set_defaults(func=lambda args : create.run(args.dependencies))
+    create_parser.add_argument('-d', '--dependency', default='master', help='pull request to depend on')
+    create_parser.set_defaults(func=lambda args : create.run(args.dependency))
 
     update_parser = subparsers.add_parser('update', help='update %(prog)s')
     update_parser.set_defaults(func=lambda _ : update.run())

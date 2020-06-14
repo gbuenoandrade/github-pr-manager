@@ -60,6 +60,10 @@ class Git(object):
         return {pr.compare: pr.number for pr in prs}
 
     @staticmethod
+    def get_pr_num_to_branch(prs):
+        return {pr.number: pr.compare for pr in prs}
+
+    @staticmethod
     def checkout(branch):
         run_cmd(f'git checkout {branch}')
 
@@ -80,6 +84,19 @@ class Git(object):
         _, _, ret = run_cmd(
                 f'git merge {branch} -m "{message}"', interactive=True, check=False)
         return not ret
+
+    @staticmethod
+    def get_last_commit():
+        out, _, _ = run_cmd("git log -1 --pretty='format:%s%n%b'")
+        tokens = out.partition('\n')
+        title = tokens[0]
+        body = tokens[-1]
+        return title, body
+    
+    @staticmethod
+    def create_pr(base, title, body):
+        run_cmd(f'gh pr create --base {base} --title "{title}" --body "{body}" --web',
+                interactive=True)
 
 
 class PR(object):
