@@ -7,7 +7,7 @@
 - `prman evolve`
 
     <img src="docs/pr_graph.png">
-    
+
     Traverse all open PRs, in topological order, merging base branch into head branch whenever there is a new update.
     The above graph would generate.
     1. `git checkout feature-a; git merge master`
@@ -16,6 +16,10 @@
     4. `git checkout feature-a-1; git merge feature-a`
     5. `git checkout feature-c-1; git merge feature-c`
     6. `git checkout feature-c-2; git merge feature-c`
+
+    Automated commits
+
+    <img src="docs/propagate_commit.png" width="300">
 
 - `prman create [-d/--dependency <PR number or head branch>]`
 
