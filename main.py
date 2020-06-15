@@ -13,17 +13,15 @@ def main():
 
     evolve_parser = subparsers.add_parser('evolve', help='propage change to dependent pull requests')
     evolve_parser.add_argument('--continue', dest='cont', action='store_true')
-    evolve_parser.set_defaults(func=evolve.run)
+    evolve_parser.set_defaults(func=lambda args: evolve.run(args.cont))
 
     submit_parser = subparsers.add_parser('submit', help='submit pull request')
     submit_parser.set_defaults(func=lambda _ : submit.run())
 
     create_parser = subparsers.add_parser('create', help='create pull request')
-    create_parser.add_argument('-d', '--dependency', default='master', help='pull request to depend on')
+    create_parser.add_argument(
+            '-d', '--dependency', default='master', help='dependency pull request; number or head branch')
     create_parser.set_defaults(func=lambda args : create.run(args.dependency))
-
-    update_parser = subparsers.add_parser('update', help='update %(prog)s')
-    update_parser.set_defaults(func=lambda _ : update.run())
 
     args = parser.parse_args()
     logging.basicConfig(

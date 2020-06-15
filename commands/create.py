@@ -1,26 +1,24 @@
 import logging
 
-from .utils import Git
+from .utils import Git, CommandRunner
 
 
 def run(dep):
-    git = Git()
+    runner = CommandRunner()
+    git = Git(runner)
     git.ensure_is_git_repo()
     git.ensure_working_tree_is_clean()
+    git.load()
 
-    branches, cur = git.get_local_branches()
-    if dep != 'master':
-        prs = git.get_prs(branches)
-        pr_to_branch = git.get_pr_num_to_branch(prs)
-        if dep not in pr_to_branch:
-            prs_str = ', '.join([f'#{pr.number}' for pr in prs])
-            logging.error(f'could not find #{dep} among checked out PRs: {prs_str}')
-            exit(1)
-        base = pr_to_branch[dep]
-    else:
+    if dep == 'master':
         base = 'master'
-    git.push(cur)
-    title, body = git.get_last_commit()
+    else:
+        pr = git.get_pr_from_number(dep) if dep.isnumeric() else git.get_pr_from_branch(dep)
+        base = pr.compare
+    git.ensure_branch_is_up_to_date(base)
+    current_branch = git.get_current_branch()
+    git.push(current_branch)
+    _, title, body = git.get_last_commit_info()
     if base != 'master':
-        body += f'\n\ndepends on #{dep}'
+        body += f'\n\ndepends on #{pr.number}'
     git.create_pr(base, title, body)

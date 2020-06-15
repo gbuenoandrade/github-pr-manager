@@ -2,42 +2,15 @@ import logging
 import json
 import os
 
-from collections import defaultdict
-from .utils import PR, Git
+from .utils import PR, Git, CommandRunner
 
 
 MERGE_MESSAGE_TEMPLATE = 'Propagate changes from %s via prman 🤖'
-EVOLVE_PATH = '.evolve'
+EVOLVE_PATH = '.prman_evolve'
 
 
-def topologically_sorted(prs):
-    adj = defaultdict(lambda: [])
-    visi = []
-    def dfs(cur):
-        # Assumes the graph is an arborescence.
-        for v in adj[cur]:
-            dfs(v)
-        visi.append(cur)
-    br_to_pr = {}
-    for pr in prs:
-        adj[pr.base].append(pr.compare)
-        br_to_pr[pr.compare] = pr
-    dfs('master')
-    return [br_to_pr[br] for br in visi[::-1] if br != 'master']
-
-
-def propagate(git, pr, branch_to_pr_num):
-    git.checkout(pr.compare)
-    base_pr = f'#{branch_to_pr_num[pr.base]}' if pr.base != 'master' else 'master'
-    message = MERGE_MESSAGE_TEMPLATE % base_pr
-    if not git.merge(pr.base, message):
-        return False
-    git.push(pr.compare)
-    return True
-
-
-def save_evolve(cur, rem_prs, branch_to_pr_num):
-    state = {'cur': cur, 'rem_prs': rem_prs, 'branch_to_pr_num': branch_to_pr_num}
+def save_evolve(initial_branch, sorted_prs, idx):
+    state = {'initial_branch': initial_branch, 'sorted_prs': sorted_prs, 'idx': idx}
     with open(EVOLVE_PATH, 'w') as f:
         json.dump(state, f, default=lambda x: x.__dict__)
 
@@ -45,52 +18,56 @@ def save_evolve(cur, rem_prs, branch_to_pr_num):
 def load_evolve():
     with open(EVOLVE_PATH, 'r') as f:
         data = json.load(f)
-    cur = data['cur']
-    rem_prs = [PR(d['number'], d['base'], d['compare'], d['url'], d['title']) for d in data['rem_prs']]
-    branch_to_pr_num = data['branch_to_pr_num']
+    initial_branch = data['initial_branch']
+    sorted_prs = [PR.from_dict(d) for d in data['sorted_prs']]
+    idx = data['idx']
     os.remove(EVOLVE_PATH)
-    return cur, rem_prs, branch_to_pr_num
+    return initial_branch, sorted_prs, idx, 
 
 
-def evolve(git, cur, prs, branch_to_pr_num):
-    git.ff_master(cur)
-    for idx, pr in enumerate(prs):
+def propagate(git, pr):
+    git.checkout(pr.compare)
+    base_pr = f'#{git.get_pr_from_branch(pr.base).number}' if pr.base != 'master' else 'master'
+    message = MERGE_MESSAGE_TEMPLATE % base_pr
+    if not git.merge(pr.base, message):
+        return False
+    git.push(pr.compare)
+    return True
+
+
+def evolve(git, initial_branch, sorted_prs, start):
+    git.ff_master()
+    for idx in range(start, len(sorted_prs)):
+        pr = sorted_prs[idx]
         print(f'\nEvolving {pr}')
-        if not propagate(git, pr, branch_to_pr_num):
-            save_evolve(cur, prs[idx:], branch_to_pr_num)
+        if not propagate(git, pr):
+            save_evolve(initial_branch, sorted_prs, idx)
             print('Run `prman evolve --continue` once you have committed the result')
             exit(1)
     return True
 
 
-def run(args):
-    git = Git()
+def run(is_continue):
+    is_evolving = os.path.isfile(EVOLVE_PATH)
+    if is_continue and not is_evolving:
+        logging.error('no evolve in progress?')
+        exit(1)
+    if is_evolving and not is_continue:
+        logging.error('pending evolve operation; run `prman evolve --continue` instead')
+        exit(1)
+
+    runner = CommandRunner()
+    git = Git(runner)
     git.ensure_is_git_repo()
     git.ensure_working_tree_is_clean()
-    is_pending = os.path.isfile(EVOLVE_PATH)
-    if not args.cont:
-        if is_pending:
-            logging.error('pending evolve operation; call `prman evolve --continue` instead')
-            exit(1)
-        local_branches, cur = git.get_local_branches()
-        logging.info(f'current branch: {cur}')
-        logging.info(f'local branches: {", ".join([b for b in local_branches])}')
-        prs = git.get_prs(local_branches)
-        logging.info(f'PRs before sorting: {prs}')
-        prs = topologically_sorted(prs)
-        logging.info(f'PRs after sorting: {prs}')
-        branch_to_pr_num = git.get_branch_to_pr_num(prs)
-        logging.info(f'branch to PR num: {branch_to_pr_num}')
-
-        branches = [pr.compare for pr in prs]
-        for branch in branches:
-            git.ensure_branch_is_up_to_date(branch)
+    if is_continue:
+        initial_branch, sorted_prs, start = load_evolve()
+        git.load(sorted_prs)
     else:
-        if not is_pending:
-            logging.error(f'could not find {EVOLVE_PATH}')
-            exit(1)
-        cur, prs, branch_to_pr_num = load_evolve()
-        logging.info(f'current branch: {cur}')
-
-    evolve(git, cur, prs, branch_to_pr_num)
-    git.checkout(cur)
+        git.load()
+        git.ensure_prs_are_up_to_date()
+        initial_branch = git.get_current_branch()
+        sorted_prs = git.get_sorted_prs()
+        start = 0
+    evolve(git, initial_branch, sorted_prs, start)
+    git.checkout(initial_branch)
